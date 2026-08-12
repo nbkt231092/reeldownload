@@ -311,9 +311,20 @@ class App(ctk.CTk):
                 thread_ydl_opts['outtmpl'] = {'default': f"{video_base}.%(ext)s"}
 
                 try:
+                    info = None
                     with yt_dlp.YoutubeDL(thread_ydl_opts) as ydl:
                         info = ydl.extract_info(url, download=(mode == "download"))
                         
+                    # FALLBACK: Nếu tải bằng Cookie thất bại, thử tải lại không dùng Cookie (Dành cho video Public)
+                    if not info and ('cookiefile' in thread_ydl_opts or 'cookiesfrombrowser' in thread_ydl_opts):
+                        self.log(f"   > ⚠️ Lỗi với Cookie. Đang thử tải lại không dùng Cookie (Public Mode)...")
+                        fallback_opts = thread_ydl_opts.copy()
+                        fallback_opts.pop('cookiefile', None)
+                        fallback_opts.pop('cookiesfrombrowser', None)
+                        fallback_opts.pop('http_headers', None)
+                        with yt_dlp.YoutubeDL(fallback_opts) as ydl:
+                            info = ydl.extract_info(url, download=(mode == "download"))
+
                     if not info:
                         self.log(f"   > ❌ Bỏ qua video này (Lỗi link/Bị ẩn/Bị chặn).")
                         if url in existing_data:
