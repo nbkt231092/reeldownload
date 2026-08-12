@@ -76,6 +76,11 @@ class App(ctk.CTk):
         self.entry_threads.grid(row=3, column=1, padx=5, pady=5, sticky="w")
         self.entry_threads.insert(0, "3")
 
+        self.label_ua = ctk.CTkLabel(self.frame_network, text="User-Agent (GPM):")
+        self.label_ua.grid(row=4, column=0, padx=5, pady=5, sticky="e")
+        self.entry_ua = ctk.CTkEntry(self.frame_network, width=350, placeholder_text="Mặc định của yt-dlp nếu để trống")
+        self.entry_ua.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+
         # 3. Hộp Log
         self.log_box = ctk.CTkTextbox(self, width=750, height=200)
         self.log_box.pack(pady=10)
@@ -123,6 +128,8 @@ class App(ctk.CTk):
                     if "threads" in config:
                         self.entry_threads.delete(0, "end")
                         self.entry_threads.insert(0, str(config["threads"]))
+                    if "user_agent" in config and config["user_agent"]:
+                        self.entry_ua.insert(0, config["user_agent"])
             except Exception as e:
                 pass
 
@@ -131,7 +138,8 @@ class App(ctk.CTk):
             config = {
                 "proxy": self.entry_proxy.get().strip(),
                 "cookie": self.cookie_path.get(),
-                "threads": self.entry_threads.get().strip()
+                "threads": self.entry_threads.get().strip(),
+                "user_agent": self.entry_ua.get().strip()
             }
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4)
@@ -186,6 +194,7 @@ class App(ctk.CTk):
     def run_main_logic(self, mode):
         raw_urls = self.textbox_urls.get("1.0", "end-1c").strip()
         proxy_val = self.entry_proxy.get().strip()
+        user_agent_val = self.entry_ua.get().strip()
         cookie = self.cookie_path.get()
         
         try:
@@ -246,6 +255,14 @@ class App(ctk.CTk):
                 formatted_proxy = proxy_val
             ydl_opts['proxy'] = formatted_proxy
             self.log(f"🌐 Đang sử dụng Proxy: {formatted_proxy}")
+
+        if user_agent_val:
+            ydl_opts['http_headers'] = {
+                'User-Agent': user_agent_val,
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,vi;q=0.8'
+            }
+            self.log(f"🕵️ Đang sử dụng User-Agent: {user_agent_val[:50]}...")
 
         if mode == "download":
             ydl_opts.update({
