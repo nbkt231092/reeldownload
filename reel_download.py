@@ -88,7 +88,10 @@ class App(ctk.CTk):
         self.frame_split.pack(pady=5, fill="x", padx=50)
         
         self.check_split = ctk.CTkCheckBox(self.frame_split, text="Bật chế độ tự động chia thư mục", variable=self.split_enabled, command=self.toggle_split_ui)
-        self.check_split.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky="w")
+        self.check_split.grid(row=0, column=0, columnspan=2, padx=5, pady=5, sticky="w")
+        
+        self.btn_preview = ctk.CTkButton(self.frame_split, text="🔍 Xem trước", command=self.preview_split, width=100, fg_color="#2980b9", hover_color="#1f618d")
+        self.btn_preview.grid(row=0, column=2, padx=5, pady=5, sticky="w")
         
         self.label_base_dir = ctk.CTkLabel(self.frame_split, text="Thư mục gốc:")
         self.label_base_dir.grid(row=1, column=0, padx=5, pady=5, sticky="e")
@@ -161,6 +164,46 @@ class App(ctk.CTk):
         if path:
             self.split_base_dir.set(path)
             self.save_config()
+
+    def preview_split(self):
+        raw_urls = self.textbox_urls.get("1.0", "end-1c").strip()
+        url_list = [url.strip() for url in raw_urls.split('\n') if url.strip() and "facebook.com" in url]
+        
+        if not url_list:
+            self.log("⚠️ Không có link Facebook hợp lệ nào để xem trước.")
+            return
+            
+        self.log("\n==========================================")
+        self.log(f"🔍 BẢN XEM TRƯỚC (Tổng: {len(url_list)} video)")
+        
+        if self.split_enabled.get() == 0:
+            self.log("▶ Chế độ chia thư mục: TẮT")
+            self.log(f"▶ Thư mục đích: fb_data (Chứa toàn bộ {len(url_list)} video)")
+        else:
+            try:
+                base_dir = self.split_base_dir.get().strip()
+                prefix = self.entry_prefix.get().strip()
+                start_idx = int(self.entry_start.get().strip())
+                chunk_size = int(self.entry_chunk.get().strip())
+                
+                self.log(f"▶ Chế độ chia thư mục: BẬT")
+                self.log(f"▶ Phân bổ: {chunk_size} video mỗi thư mục")
+                
+                groups = {}
+                for i, url in enumerate(url_list):
+                    group_num = i // chunk_size
+                    folder_name = f"{prefix}{start_idx + group_num}"
+                    if folder_name not in groups:
+                        groups[folder_name] = []
+                    groups[folder_name].append(i + 1) # Track original lines (1-indexed based on url_list)
+                    
+                for folder_name, items in groups.items():
+                    folder_path = os.path.join(base_dir, folder_name)
+                    self.log(f"  📁 Thư mục: {folder_name} ({len(items)} video) | STT nội bộ: 1 -> {len(items)}")
+            except ValueError:
+                self.log("❌ Lỗi cấu hình: Các chỉ số (bắt đầu, số lượng) phải là số nguyên!")
+                
+        self.log("==========================================\n")
 
     def stop_process(self):
         self.log("\n⚠️ Đang yêu cầu dừng... Các tiến trình đang tải/xử lý dở sẽ hoàn thành nốt, vui lòng đợi!")
