@@ -326,6 +326,13 @@ class App(ctk.CTk):
         except ValueError:
             num_threads = 3
 
+        url_list = [url.strip() for url in raw_urls.split('\n') if url.strip() and "facebook.com" in url]
+
+        if not url_list:
+            messagebox.showerror("Lỗi", "Không tìm thấy link Facebook hợp lệ nào! Hãy dán link /reel/ riêng lẻ.")
+            self.enable_buttons()
+            return
+
         # Chuẩn bị danh sách Task và Data per folder
         folder_data_map = {}
         tasks = []
