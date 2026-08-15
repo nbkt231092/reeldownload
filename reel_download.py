@@ -34,9 +34,11 @@ class App(ctk.CTk):
         super().__init__()
 
         self.title("FB Reels Downloader - Ultimate Version")
-        self.geometry("850x750")
+        self.geometry("850x920")
 
         self.cookie_path = ctk.StringVar(value="Chưa chọn file cookie...")
+        self.split_enabled = ctk.IntVar(value=0)
+        self.split_base_dir = ctk.StringVar(value=os.path.abspath(os.path.dirname(__file__)))
         self.model = None
 
         self.label_title = ctk.CTkLabel(self, text="FB REELS AUTOMATION", font=("Roboto", 24, "bold"))
@@ -81,6 +83,41 @@ class App(ctk.CTk):
         self.entry_ua = ctk.CTkEntry(self.frame_network, width=350, placeholder_text="Mặc định của yt-dlp nếu để trống")
         self.entry_ua.grid(row=4, column=1, padx=5, pady=5, sticky="w")
 
+        # 2.5. Phân chia Thư mục
+        self.frame_split = ctk.CTkFrame(self, fg_color="transparent")
+        self.frame_split.pack(pady=5, fill="x", padx=50)
+        
+        self.check_split = ctk.CTkCheckBox(self.frame_split, text="Bật chế độ tự động chia thư mục", variable=self.split_enabled, command=self.toggle_split_ui)
+        self.check_split.grid(row=0, column=0, columnspan=3, padx=5, pady=5, sticky="w")
+        
+        self.label_base_dir = ctk.CTkLabel(self.frame_split, text="Thư mục gốc:")
+        self.label_base_dir.grid(row=1, column=0, padx=5, pady=5, sticky="e")
+        self.entry_base_dir = ctk.CTkEntry(self.frame_split, textvariable=self.split_base_dir, width=350, state="disabled")
+        self.entry_base_dir.grid(row=1, column=1, padx=5, pady=5, sticky="w")
+        self.btn_base_dir = ctk.CTkButton(self.frame_split, text="Chọn", command=self.select_base_dir, width=60, state="disabled")
+        self.btn_base_dir.grid(row=1, column=2, padx=5, pady=5, sticky="w")
+        
+        self.label_prefix = ctk.CTkLabel(self.frame_split, text="Tiền tố thư mục:")
+        self.label_prefix.grid(row=2, column=0, padx=5, pady=5, sticky="e")
+        self.entry_prefix = ctk.CTkEntry(self.frame_split, width=100)
+        self.entry_prefix.grid(row=2, column=1, padx=5, pady=5, sticky="w")
+        self.entry_prefix.insert(0, "temp")
+        self.entry_prefix.configure(state="disabled")
+
+        self.label_start = ctk.CTkLabel(self.frame_split, text="Chỉ số bắt đầu:")
+        self.label_start.grid(row=3, column=0, padx=5, pady=5, sticky="e")
+        self.entry_start = ctk.CTkEntry(self.frame_split, width=100)
+        self.entry_start.grid(row=3, column=1, padx=5, pady=5, sticky="w")
+        self.entry_start.insert(0, "43")
+        self.entry_start.configure(state="disabled")
+
+        self.label_chunk = ctk.CTkLabel(self.frame_split, text="Số video / thư mục:")
+        self.label_chunk.grid(row=4, column=0, padx=5, pady=5, sticky="e")
+        self.entry_chunk = ctk.CTkEntry(self.frame_split, width=100)
+        self.entry_chunk.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+        self.entry_chunk.insert(0, "11")
+        self.entry_chunk.configure(state="disabled")
+
         # 3. Hộp Log
         self.log_box = ctk.CTkTextbox(self, width=750, height=200)
         self.log_box.pack(pady=10)
@@ -111,6 +148,20 @@ class App(ctk.CTk):
         self.config_file = "config.json"
         self.load_config()
 
+    def toggle_split_ui(self):
+        state = "normal" if self.split_enabled.get() == 1 else "disabled"
+        self.btn_base_dir.configure(state=state)
+        # Entry requires special handling for state
+        self.entry_prefix.configure(state=state)
+        self.entry_start.configure(state=state)
+        self.entry_chunk.configure(state=state)
+
+    def select_base_dir(self):
+        path = filedialog.askdirectory(title="Chọn thư mục gốc để lưu")
+        if path:
+            self.split_base_dir.set(path)
+            self.save_config()
+
     def stop_process(self):
         self.log("\n⚠️ Đang yêu cầu dừng... Các tiến trình đang tải/xử lý dở sẽ hoàn thành nốt, vui lòng đợi!")
         self.stop_event.set()
@@ -130,6 +181,29 @@ class App(ctk.CTk):
                         self.entry_threads.insert(0, str(config["threads"]))
                     if "user_agent" in config and config["user_agent"]:
                         self.entry_ua.insert(0, config["user_agent"])
+                        
+                    if "split_enabled" in config:
+                        self.split_enabled.set(config["split_enabled"])
+                        self.toggle_split_ui()
+                    if "split_base_dir" in config and config["split_base_dir"]:
+                        self.split_base_dir.set(config["split_base_dir"])
+                    
+                    # Temporarily enable entry to modify
+                    self.entry_prefix.configure(state="normal")
+                    self.entry_start.configure(state="normal")
+                    self.entry_chunk.configure(state="normal")
+                    
+                    if "split_prefix" in config:
+                        self.entry_prefix.delete(0, "end")
+                        self.entry_prefix.insert(0, str(config["split_prefix"]))
+                    if "split_start" in config:
+                        self.entry_start.delete(0, "end")
+                        self.entry_start.insert(0, str(config["split_start"]))
+                    if "split_chunk" in config:
+                        self.entry_chunk.delete(0, "end")
+                        self.entry_chunk.insert(0, str(config["split_chunk"]))
+                    
+                    self.toggle_split_ui()
             except Exception as e:
                 pass
 
@@ -139,7 +213,12 @@ class App(ctk.CTk):
                 "proxy": self.entry_proxy.get().strip(),
                 "cookie": self.cookie_path.get(),
                 "threads": self.entry_threads.get().strip(),
-                "user_agent": self.entry_ua.get().strip()
+                "user_agent": self.entry_ua.get().strip(),
+                "split_enabled": self.split_enabled.get(),
+                "split_base_dir": self.split_base_dir.get(),
+                "split_prefix": self.entry_prefix.get().strip(),
+                "split_start": self.entry_start.get().strip(),
+                "split_chunk": self.entry_chunk.get().strip()
             }
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4)
@@ -204,30 +283,56 @@ class App(ctk.CTk):
         except ValueError:
             num_threads = 3
 
-        output_dir = os.path.abspath('fb_data')
-        csv_path = os.path.join(output_dir, 'report.csv')
+        # Chuẩn bị danh sách Task và Data per folder
+        folder_data_map = {}
+        tasks = []
 
-        url_list = [url.strip() for url in raw_urls.split('\n') if url.strip() and "facebook.com" in url]
+        is_split = self.split_enabled.get() == 1
+        try:
+            base_dir = self.split_base_dir.get().strip() if is_split else os.path.abspath('.')
+            prefix = self.entry_prefix.get().strip() if is_split else 'fb_data'
+            start_idx = int(self.entry_start.get().strip()) if is_split else 0
+            chunk_size = int(self.entry_chunk.get().strip()) if is_split else len(url_list)
+        except ValueError:
+            self.log("❌ Lỗi: Cấu hình chia thư mục không hợp lệ (Phải là số nguyên). Dùng mặc định.")
+            is_split = False
+            base_dir = os.path.abspath('.')
+            prefix = 'fb_data'
+            start_idx = 0
+            chunk_size = len(url_list)
 
-        if not url_list:
-            messagebox.showerror("Lỗi", "Không tìm thấy link Facebook hợp lệ nào! Hãy dán link /reel/ riêng lẻ.")
-            self.enable_buttons()
-            return
+        for i, url in enumerate(url_list):
+            if is_split:
+                group = i // chunk_size
+                folder_name = f"{prefix}{start_idx + group}"
+            else:
+                folder_name = prefix
 
-        if not os.path.exists(output_dir): 
-            os.makedirs(output_dir)
+            folder_path = os.path.join(base_dir, folder_name)
+            local_idx = (i % chunk_size) + 1
+            tasks.append((url, folder_path, local_idx))
 
-        # Đọc Data cũ để check trùng lặp
-        existing_data = {}
-        if os.path.exists(csv_path):
-            try:
-                df_old = pd.read_csv(csv_path)
-                for _, row in df_old.iterrows():
-                    link = str(row.get('Link', '')).strip()
-                    if link and link != 'nan':
-                        existing_data[link] = row.to_dict()
-            except Exception as e:
-                self.log(f"⚠️ Không thể đọc file CSV cũ: {e}")
+            if folder_path not in folder_data_map:
+                if not os.path.exists(folder_path):
+                    os.makedirs(folder_path)
+                csv_p = os.path.join(folder_path, 'report.csv')
+                existing_data = {}
+                if os.path.exists(csv_p):
+                    try:
+                        df_old = pd.read_csv(csv_p)
+                        for _, row in df_old.iterrows():
+                            link = str(row.get('Link', '')).strip()
+                            if link and link != 'nan':
+                                existing_data[link] = row.to_dict()
+                    except Exception as e:
+                        self.log(f"⚠️ Không thể đọc file CSV cũ {csv_p}: {e}")
+                
+                folder_data_map[folder_path] = {
+                    'csv_path': csv_p,
+                    'existing_data': existing_data,
+                    'data_list': [],
+                    'csv_lock': threading.Lock()
+                }
 
         # --- CẤU HÌNH YT-DLP ---
         ydl_opts = {
@@ -280,32 +385,35 @@ class App(ctk.CTk):
                 self.log("Đang nạp AI Whisper vào bộ nhớ...")
                 self.model = whisper.load_model("base")
 
-            data_list = []
-            
-            csv_lock = threading.Lock()
             whisper_lock = threading.Lock()
 
-            def process_video(index, url):
+            def process_video(url, folder_path, index):
                 if self.stop_event.is_set():
                     return
                 
                 import glob
-                video_base = os.path.join(output_dir, str(index))
-                srt_file = os.path.join(output_dir, f"{index}.srt")
+                video_base = os.path.join(folder_path, str(index))
+                srt_file = os.path.join(folder_path, f"{index}.srt")
+                
+                f_data = folder_data_map[folder_path]
+                existing_data = f_data['existing_data']
+                csv_path = f_data['csv_path']
+                data_list = f_data['data_list']
+                csv_lock = f_data['csv_lock']
                 
                 # Bỏ qua nếu đã tải (Check trùng lặp)
                 if mode == "download" and url in existing_data:
                     existing_files = glob.glob(f"{video_base}.*")
                     video_files = [f for f in existing_files if not f.endswith('.srt')]
                     if video_files:
-                        self.log(f"⏭️ Bỏ qua Video {index}: Đã tải trước đó.")
+                        self.log(f"⏭️ [{os.path.basename(folder_path)}] Bỏ qua Video {index}: Đã tải trước đó.")
                         with csv_lock:
                             data_list.append(existing_data[url])
                             pd.DataFrame(data_list).to_csv(csv_path, index=False, encoding='utf-8-sig')
                         return
 
                 self.log(f"--------------------------------------")
-                self.log(f"🎬 [Video {index}] Đang trích xuất dữ liệu...")
+                self.log(f"🎬 [{os.path.basename(folder_path)}] [Video {index}] Đang trích xuất dữ liệu...")
                 
                 thread_ydl_opts = ydl_opts.copy()
                 thread_ydl_opts['outtmpl'] = {'default': f"{video_base}.%(ext)s"}
@@ -415,14 +523,15 @@ class App(ctk.CTk):
                      self.log(f"   > ❌ Lỗi: {loop_err}")
 
             with concurrent.futures.ThreadPoolExecutor(max_workers=num_threads) as executor:
-                futures = [executor.submit(process_video, idx, u) for idx, u in enumerate(url_list, start=1)]
+                futures = [executor.submit(process_video, url, fpath, l_idx) for url, fpath, l_idx in tasks]
                 for future in concurrent.futures.as_completed(futures):
                     future.result()
 
             # Lưu file CSV & Báo cáo
-            if data_list:
-                self.log(f"\n✅ HOÀN TẤT! Dữ liệu đã được lưu an toàn vào report.csv.")
-                self.after(0, lambda: messagebox.showinfo("Thành công", f"Đã xử lý xong {len(data_list)} video!"))
+            total_processed = sum(len(f_data['data_list']) for f_data in folder_data_map.values())
+            if total_processed > 0:
+                self.log(f"\n✅ HOÀN TẤT! Dữ liệu đã được lưu an toàn vào {len(folder_data_map)} thư mục.")
+                self.after(0, lambda: messagebox.showinfo("Thành công", f"Đã xử lý xong tổng cộng {total_processed} video!"))
             else:
                 self.log(f"\n⚠️ KHÔNG CÓ DỮ LIỆU ĐỂ LƯU!")
                 self.log(f"Nguyên nhân: Link bị lỗi, nhập sai định dạng hoặc bị Facebook chặn.")
