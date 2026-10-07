@@ -38,6 +38,7 @@ class App(ctk.CTk):
 
         self.cookie_path = ctk.StringVar(value="Chưa chọn file cookie...")
         self.split_enabled = ctk.IntVar(value=0)
+        self.generate_sub = ctk.IntVar(value=0)
         self.split_base_dir = ctk.StringVar(value=os.path.abspath(os.path.dirname(__file__)))
         self.model = None
 
@@ -82,6 +83,9 @@ class App(ctk.CTk):
         self.label_ua.grid(row=4, column=0, padx=5, pady=5, sticky="e")
         self.entry_ua = ctk.CTkEntry(self.frame_network, width=350, placeholder_text="Mặc định của yt-dlp nếu để trống")
         self.entry_ua.grid(row=4, column=1, padx=5, pady=5, sticky="w")
+
+        self.check_sub = ctk.CTkCheckBox(self.frame_network, text="Tự động tạo Subtitle (AI Whisper)", variable=self.generate_sub, command=self.toggle_sub_btn)
+        self.check_sub.grid(row=5, column=0, columnspan=2, padx=5, pady=5, sticky="e")
 
         # 2.5. Phân chia Thư mục
         self.frame_split = ctk.CTkFrame(self, fg_color="transparent")
@@ -150,6 +154,13 @@ class App(ctk.CTk):
 
         self.config_file = "config.json"
         self.load_config()
+        self.toggle_sub_btn()
+
+    def toggle_sub_btn(self):
+        if self.generate_sub.get() == 1:
+            self.btn_download.configure(text="TẢI VỀ & TẠO SUB")
+        else:
+            self.btn_download.configure(text="CHỈ TẢI VIDEO")
 
     def toggle_split_ui(self):
         state = "normal" if self.split_enabled.get() == 1 else "disabled"
@@ -245,8 +256,12 @@ class App(ctk.CTk):
                     if "split_chunk" in config:
                         self.entry_chunk.delete(0, "end")
                         self.entry_chunk.insert(0, str(config["split_chunk"]))
+                        
+                    if "generate_sub" in config:
+                        self.generate_sub.set(config["generate_sub"])
                     
                     self.toggle_split_ui()
+                    self.toggle_sub_btn()
             except Exception as e:
                 pass
 
@@ -261,7 +276,8 @@ class App(ctk.CTk):
                 "split_base_dir": self.split_base_dir.get(),
                 "split_prefix": self.entry_prefix.get().strip(),
                 "split_start": self.entry_start.get().strip(),
-                "split_chunk": self.entry_chunk.get().strip()
+                "split_chunk": self.entry_chunk.get().strip(),
+                "generate_sub": self.generate_sub.get()
             }
             with open(self.config_file, "w", encoding="utf-8") as f:
                 json.dump(config, f, indent=4)
@@ -431,7 +447,7 @@ class App(ctk.CTk):
             self.log(f"\n🔄 BẮT ĐẦU CẬP NHẬT DATA ({len(url_list)} link)")
 
         try:
-            if mode == "download" and self.model is None:
+            if mode == "download" and self.generate_sub.get() == 1 and self.model is None:
                 self.log("Đang nạp AI Whisper vào bộ nhớ...")
                 self.model = whisper.load_model("base")
 
@@ -526,24 +542,27 @@ class App(ctk.CTk):
                             retry += 1
 
                         if actual_video_file and os.path.exists(actual_video_file):
-                            if not os.path.exists(srt_file):
-                                self.log(f"   > Đang AI Transcribe âm thanh...")
-                                try:
-                                    with whisper_lock:
-                                        result = self.model.transcribe(actual_video_file, fp16=torch.cuda.is_available())
-                                    with open(srt_file, "w", encoding="utf-8") as f:
-                                        for i, segment in enumerate(result['segments'], start=1):
-                                            start = self.format_timestamp(segment['start'])
-                                            end = self.format_timestamp(segment['end'])
-                                            f.write(f"{i}\n{start} --> {end}\n{segment['text'].strip()}\n\n")
-                                    self.log(f"   > ✅ Tạo Sub thành công.")
-                                    sub_status = "Thành công"
-                                except Exception as e:
-                                    self.log(f"   > ⚠️ Lỗi Whisper: {e}")
-                                    sub_status = "Lỗi AI"
+                            if self.generate_sub.get() == 1:
+                                if not os.path.exists(srt_file):
+                                    self.log(f"   > Đang AI Transcribe âm thanh...")
+                                    try:
+                                        with whisper_lock:
+                                            result = self.model.transcribe(actual_video_file, fp16=torch.cuda.is_available())
+                                        with open(srt_file, "w", encoding="utf-8") as f:
+                                            for i, segment in enumerate(result['segments'], start=1):
+                                                start = self.format_timestamp(segment['start'])
+                                                end = self.format_timestamp(segment['end'])
+                                                f.write(f"{i}\n{start} --> {end}\n{segment['text'].strip()}\n\n")
+                                        self.log(f"   > ✅ Tạo Sub thành công.")
+                                        sub_status = "Thành công"
+                                    except Exception as e:
+                                        self.log(f"   > ⚠️ Lỗi Whisper: {e}")
+                                        sub_status = "Lỗi AI"
+                                else:
+                                    self.log(f"   > Đã có sẵn Subtitle, bỏ qua AI.")
+                                    sub_status = "Đã có sẵn"
                             else:
-                                self.log(f"   > Đã có sẵn Subtitle, bỏ qua AI.")
-                                sub_status = "Đã có sẵn"
+                                sub_status = "Bỏ qua"
                         else:
                             sub_status = "Lỗi tải video"
 
